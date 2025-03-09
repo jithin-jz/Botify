@@ -17,8 +17,8 @@ This project is an Instagram automation bot designed to perform tasks such as vi
 
 1. **Clone the repository**:
    ```bash
-   git clone <repository-url>
-   cd <repository-directory>
+   git clone https://github.com/jithin-jz/IGSync.git
+   cd bot.py
    ```
 
 2. **Create a virtual environment**:
