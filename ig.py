@@ -1,3 +1,4 @@
+import os
 import time
 import random
 from datetime import datetime, timedelta
@@ -17,11 +18,14 @@ class InstagramBot:
         self.cl.delay_range = [3, 7]  # Human-like interaction delays
         self._init_trackers()
         
-        # Configuration
+        # Load credentials from environment variables
         self.credentials = {
-            'username': "xkira2026",
-            'password': "9562449137"
+            'username': os.getenv("INSTAGRAM_USERNAME"),
+            'password': os.getenv("INSTAGRAM_PASSWORD")
         }
+        if not self.credentials['username'] or not self.credentials['password']:
+            raise ValueError("Instagram credentials not found in environment variables.")
+        
         self.limits = {
             'likes': 100,
             'comments': 40,
