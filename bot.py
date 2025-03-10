@@ -2,7 +2,7 @@ import os
 import time
 import random
 from datetime import datetime, timedelta
-from typing import Set
+from typing import Set, Optional
 import pytz
 from instagrapi import Client
 from instagrapi.exceptions import (
@@ -45,38 +45,54 @@ class InstagramBot:
         def wrapper(self, *args, **kwargs):
             try:
                 result = func(self, *args, **kwargs)
-                time.sleep(random.uniform(1.2, 3.8))
+                time.sleep(random.uniform(1.2, 3.8))  # Simulate human-like delays
                 return result
             except (ClientError, ClientConnectionError) as e:
                 print(f"Network error: {e}")
                 self._handle_retry()
             except ChallengeRequired:
-                print("Manual verification required")
-                exit(1)
+                print("Manual verification required. Please check your Instagram app.")
+                self._handle_challenge()
             except LoginRequired:
                 print("Re-authenticating...")
                 self.authenticate()
+            except BadPassword:
+                print("Invalid credentials or suspicious login detected. Exiting.")
+                exit(1)
+            except Exception as e:
+                print(f"Unexpected error: {e}")
+                self._handle_retry()
             return None
         return wrapper
     
-    def _handle_retry(self) -> None:
+    def _handle_retry(self, delay: Optional[int] = None) -> None:
         """Handle retry logic for temporary errors"""
-        delay = random.randint(600, 1200)
-        print(f"Temporary issue detected. Retrying in {delay//60} minutes")
+        if delay is None:
+            delay = random.randint(600, 1200)  # Default delay: 10-20 minutes
+        print(f"Temporary issue detected. Retrying in {delay // 60} minutes.")
         time.sleep(delay)
+    
+    def _handle_challenge(self) -> None:
+        """Handle Instagram's challenge requirement (e.g., manual verification)"""
+        print("Please complete the challenge in the Instagram app.")
+        time.sleep(300)  # Wait 5 minutes for the user to complete the challenge
+        self.authenticate()
     
     def authenticate(self) -> None:
         """Handle secure authentication with credentials"""
         try:
             print("Initiating secure authentication...")
             self.cl.login(**self.credentials)
-            print("Authentication successful")
+            print("Authentication successful.")
         except ChallengeRequired:
-            print("Account verification required - check your Instagram app")
-            exit(1)
+            print("Account verification required. Please check your Instagram app.")
+            self._handle_challenge()
         except BadPassword:
-            print("Invalid credentials or suspicious login detected")
+            print("Invalid credentials or suspicious login detected. Exiting.")
             exit(1)
+        except Exception as e:
+            print(f"Authentication failed: {e}")
+            self._handle_retry()
             
     def _within_limit(self, action: str, count: int) -> bool:
         """Check if action count is within daily limits"""
@@ -101,7 +117,7 @@ class InstagramBot:
                     self.cl.story_seen([story.pk])
                     self.viewed_stories.add(story.id)
                     
-                    if random.random() < 0.7:
+                    if random.random() < 0.7:  # 70% chance to like the story
                         self.cl.story_like(story.id)
                     
                     story_count += 1
@@ -112,6 +128,7 @@ class InstagramBot:
                         
             except Exception as e:
                 print(f"Error processing stories for {user.username}: {e}")
+                self._handle_retry(delay=300)  # Retry after 5 minutes
                 
     @safe_action
     def engage_feed(self) -> None:
@@ -132,7 +149,7 @@ class InstagramBot:
                 
             if (self._within_limit('comments', comment_count) 
                 and post.id not in self.commented_posts
-                and random.random() < 0.3):
+                and random.random() < 0.3):  # 30% chance to comment
                 
                 comments = ["Great content!", "Well done!", "Awesome post!"]
                 self.cl.media_comment(post.id, random.choice(comments))
@@ -153,7 +170,12 @@ class InstagramBot:
         self.authenticate()
         
         while True:
-            self.execute_cycle()
+            try:
+                self.execute_cycle()
+            except Exception as e:
+                print(f"Error during engagement cycle: {e}")
+                self._handle_retry()
+            
             delay = 1800  # 30 minutes
             next_run = datetime.now(self.timezone) + timedelta(seconds=delay)
             print(f"Next cycle at {next_run.strftime('%H:%M:%S')}")
