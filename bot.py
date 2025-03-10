@@ -2,7 +2,7 @@ import os
 import time
 import random
 from datetime import datetime, timedelta
-from typing import Set
+from typing import Set, Optional
 import pytz
 from instagrapi import Client
 from instagrapi.exceptions import (
@@ -11,25 +11,30 @@ from instagrapi.exceptions import (
 )
 
 class InstagramBot:
-    """Instagram automation client for story viewing and feed engagement."""
+    """Instagram automation client for story viewing, feed engagement, and follow/unfollow."""
     
     def __init__(self):
         self.cl = Client()
         self.cl.delay_range = [3, 7]  # Human-like interaction delays
         self._init_trackers()
         
-        # Load credentials from environment variables
+        # Load credentials and target account from environment variables
         self.credentials = {
             'username': os.getenv("INSTAGRAM_USERNAME"),
             'password': os.getenv("INSTAGRAM_PASSWORD")
         }
+        self.target_account = os.getenv("TARGET_ACCOUNT")
+        
         if not self.credentials['username'] or not self.credentials['password']:
             raise ValueError("Instagram credentials not found in environment variables.")
+        if not self.target_account:
+            raise ValueError("Target account not found in environment variables.")
         
         self.limits = {
             'likes': 100,
             'comments': 40,
-            'story_views': 200
+            'story_views': 200,
+            'follows': 10  # Daily follow/unfollow limit
         }
         self.timezone = pytz.timezone('Asia/Kolkata')
         
@@ -38,6 +43,7 @@ class InstagramBot:
         self.viewed_stories: Set[str] = set()
         self.liked_posts: Set[str] = set()
         self.commented_posts: Set[str] = set()
+        self.followed_accounts: Set[str] = set()
         
     @staticmethod
     def safe_action(func):
@@ -139,13 +145,53 @@ class InstagramBot:
                 self.commented_posts.add(post.id)
                 comment_count += 1
                 print(f"Commented on post by {post.user.username}")
-                
+    
+    @safe_action
+    def follow_target_account(self) -> Optional[bool]:
+        """Follow the target account if not already followed"""
+        if self.target_account in self.followed_accounts:
+            print(f"Already following {self.target_account}")
+            return False
+        
+        try:
+            user_id = self.cl.user_id_from_username(self.target_account)
+            self.cl.user_follow(user_id)
+            self.followed_accounts.add(self.target_account)
+            print(f"Followed {self.target_account}")
+            return True
+        except Exception as e:
+            print(f"Error following {self.target_account}: {e}")
+            return None
+    
+    @safe_action
+    def unfollow_target_account(self) -> Optional[bool]:
+        """Unfollow the target account if followed"""
+        if self.target_account not in self.followed_accounts:
+            print(f"Not following {self.target_account}")
+            return False
+        
+        try:
+            user_id = self.cl.user_id_from_username(self.target_account)
+            self.cl.user_unfollow(user_id)
+            self.followed_accounts.remove(self.target_account)
+            print(f"Unfollowed {self.target_account}")
+            return True
+        except Exception as e:
+            print(f"Error unfollowing {self.target_account}: {e}")
+            return None
+    
     def execute_cycle(self) -> None:
         """Execute complete engagement cycle"""
         print("\n--- Starting engagement cycle ---")
         print(f"Current time: {datetime.now(self.timezone).strftime('%Y-%m-%d %H:%M:%S')}")
         self.handle_stories()
         self.engage_feed()
+        
+        # Follow/unfollow logic
+        if self.follow_target_account():
+            time.sleep(random.randint(600, 1200))  # Wait 10-20 minutes before unfollowing
+            self.unfollow_target_account()
+        
         print("--- Cycle completed successfully ---\n")
         
     def run(self) -> None:
