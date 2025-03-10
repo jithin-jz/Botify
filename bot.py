@@ -2,7 +2,7 @@ import os
 import time
 import random
 from datetime import datetime, timedelta
-from typing import Set, Dict
+from typing import Set
 import pytz
 from instagrapi import Client
 from instagrapi.exceptions import (
@@ -11,7 +11,7 @@ from instagrapi.exceptions import (
 )
 
 class InstagramBot:
-    """Instagram automation client for story viewing, feed engagement, and messaging new followers"""
+    """Instagram automation client for story viewing and feed engagement."""
     
     def __init__(self):
         self.cl = Client()
@@ -29,31 +29,15 @@ class InstagramBot:
         self.limits = {
             'likes': 100,
             'comments': 40,
-            'dms': 20,
             'story_views': 200
         }
         self.timezone = pytz.timezone('Asia/Kolkata')
-        self.messaged_users_file = "messaged_users.txt"
-        self.messaged_users = self._load_messaged_users()
         
     def _init_trackers(self) -> None:
         """Initialize interaction trackers to prevent duplicates"""
         self.viewed_stories: Set[str] = set()
         self.liked_posts: Set[str] = set()
         self.commented_posts: Set[str] = set()
-        
-    def _load_messaged_users(self) -> Set[int]:
-        """Load messaged users from a file to avoid duplicates"""
-        try:
-            with open(self.messaged_users_file, "r") as file:
-                return {int(line.strip()) for line in file if line.strip()}
-        except FileNotFoundError:
-            return set()
-        
-    def _save_messaged_user(self, user_id: int) -> None:
-        """Save a messaged user to the file"""
-        with open(self.messaged_users_file, "a") as file:
-            file.write(f"{user_id}\n")
         
     @staticmethod
     def safe_action(func):
@@ -156,30 +140,12 @@ class InstagramBot:
                 comment_count += 1
                 print(f"Commented on post by {post.user.username}")
                 
-    @safe_action
-    def dm_new_followers(self) -> None:
-        """Send welcome messages to new followers, avoiding duplicates"""
-        current_followers = self.cl.user_followers(self.cl.user_id)
-        dm_count = 0
-        
-        for user_id, user in current_followers.items():
-            if dm_count >= self.limits['dms'] or user_id in self.messaged_users:
-                continue
-                
-            message = f"Hi {user.username}, thanks for connecting!"
-            self.cl.direct_send(message, user_ids=[user_id])
-            self.messaged_users.add(user_id)
-            self._save_messaged_user(user_id)
-            dm_count += 1
-            print(f"Sent welcome message to {user.username}")
-            
     def execute_cycle(self) -> None:
         """Execute complete engagement cycle"""
         print("\n--- Starting engagement cycle ---")
         print(f"Current time: {datetime.now(self.timezone).strftime('%Y-%m-%d %H:%M:%S')}")
         self.handle_stories()
         self.engage_feed()
-        self.dm_new_followers()
         print("--- Cycle completed successfully ---\n")
         
     def run(self) -> None:
